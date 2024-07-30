@@ -12,7 +12,7 @@ from PIL import Image
 from transformers import AutoModelForVision2Seq, AutoProcessor
 
 # === Verification Arguments
-MODEL_PATH = "openvla/openvla-7b"
+MODEL_PATH = "/data1/gyh/models/openvla-7b"
 SYSTEM_PROMPT = (
     "A chat between a curious user and an artificial intelligence assistant. "
     "The assistant gives helpful, detailed, and polite answers to the user's questions."
@@ -30,11 +30,12 @@ def get_openvla_prompt(instruction: str) -> str:
 @torch.inference_mode()
 def verify_openvla() -> None:
     print(f"[*] Verifying OpenVLAForActionPrediction using Model `{MODEL_PATH}`")
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    device = torch.device("cuda:6") if torch.cuda.is_available() else torch.device("cpu")
 
     # Load Processor & VLA
     print("[*] Instantiating Processor and Pretrained OpenVLA")
     processor = AutoProcessor.from_pretrained(MODEL_PATH, trust_remote_code=True)
+    print("loading...")
 
     # === BFLOAT16 + FLASH-ATTN MODE ===
     print("[*] Loading in BF16 with Flash-Attention Enabled")
@@ -69,6 +70,9 @@ def verify_openvla() -> None:
     # )
 
     print("[*] Iterating with Randomly Generated Images")
+    """
+    这里没有对数据集进行处理，而是使用随机数生成图像，在进行数据集处理时，还需要特别考虑一下。
+    """
     for _ in range(100):
         prompt = get_openvla_prompt(INSTRUCTION)
         image = Image.fromarray(np.asarray(np.random.rand(256, 256, 3) * 255, dtype=np.uint8))

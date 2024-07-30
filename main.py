@@ -17,8 +17,9 @@ vla = AutoModelForVision2Seq.from_pretrained(
 
 # Grab image input & format prompt
 # image: Image.Image = get_from_camera(...)
+INSTRUCTION = "Pick up the red square"
 image: Image.Image = Image.open("camera.jpg")
-prompt = "In: What action should the robot take to {<INSTRUCTION>}?\nOut:"
+prompt = f"In: What action should the robot take to {INSTRUCTION}?\nOut:"
 
 # Predict Action (7-DoF; un-normalize for BridgeData V2)
 inputs = processor(prompt, image).to("cuda:0", dtype=torch.bfloat16)

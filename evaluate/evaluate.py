@@ -1,4 +1,3 @@
-import tensorflow_datasets as tfds
 from transformers import AutoModelForVision2Seq, AutoProcessor
 from PIL import Image
 
@@ -7,7 +6,6 @@ from pathlib import Path
 from torch.utils.data import DataLoader
 from transformers.modeling_outputs import CausalLMOutputWithPast
 import numpy as np
-import matplotlib.pyplot as plt
 
 from prismatic.models.backbones.llm.prompting import PurePromptBuilder
 from prismatic.util.data_utils import PaddedCollatorForActionPrediction
@@ -22,7 +20,7 @@ class DataConfig:
     grad_accumulation_steps: int = 1           # Gradient accumulation steps
     image_aug: bool = True                     # Whether to train with image augmentations
     shuffle_buffer_size: int = 100_000
-    device = torch.device("cuda:6") if torch.cuda.is_available() else torch.device("cpu")
+    device = torch.device("cuda:7") if torch.cuda.is_available() else torch.device("cpu")
 
 
 cfg = DataConfig()
@@ -102,11 +100,6 @@ for batch_idx, batch in enumerate(dataloader):
     mask = action_gt > action_tokenizer.action_token_begin_idx
     # print(action_preds)
 
-    # 4.对比预测数据和真实数据，计算准确率
-    correct_preds = (action_preds == action_gt) & mask
-    action_accuracy = correct_preds.sum().float() / mask.sum().float()
-    print("当前准确率为：", action_accuracy)
-
     # 将预测动作和真实动作转换为连续动作，并进行L1损失计算
     continuous_actions_pred = torch.tensor(
         action_tokenizer.decode_token_ids_to_actions(action_preds[mask].cpu().numpy())
@@ -115,7 +108,12 @@ for batch_idx, batch in enumerate(dataloader):
         action_tokenizer.decode_token_ids_to_actions(action_gt[mask].cpu().numpy())
     )
 
-    # 5.数据可视化-三维坐标
+    # 4.对比预测数据和真实数据，计算准确率
+    correct_preds = (action_preds == action_gt) & mask
+    action_accuracy = correct_preds.sum().float() / mask.sum().float()
+    print("当前准确率为：", action_accuracy)
+
+    # 5.数据可视化
     # 将Tensors转换为NumPy数组
     pred_np = continuous_actions_pred.detach().cpu().numpy()
     gt_np = continuous_actions_gt.detach().cpu().numpy()
@@ -126,64 +124,5 @@ for batch_idx, batch in enumerate(dataloader):
     break
 
 
-# 5.数据可视化-散点对比
-builder = tfds.builder_from_directory(builder_dir='/data1/gyh/datasets/bridge_orig/1.0.0')
-ds = builder.as_dataset(split='val[:1]')              # 只取train数据集的第一个episode
-
-def as_gif(images):
-  # Render the images as the gif:
-  images[0].save('./tmp/temp.gif', save_all=True, append_images=images[1:], duration=1000, loop=0)
-  gif_bytes = open('./tmp/temp.gif', 'rb').read()
-  return gif_bytes
 
 
-action_pred_list = []
-action_gt_list = []
-image_list = []
-
-for episode in ds:
-    steps = episode['steps']
-    for step in steps:
-        image = Image.fromarray(np.array(step['observation']['image_1']))
-        image_list.append(image)
-        prompt = str(step['language_instruction'])
-        inputs = processor(prompt, image).to(cfg.device, dtype=torch.bfloat16)
-        action_pred = vla.predict_action(**inputs, unnorm_key='bridge_orig', do_sample=False)
-        action_gt = step['action']
-        action_pred_list.append(action_pred)
-        action_gt_list.append(action_gt)
-
-
-# 保存文件
-as_gif(image_list)
-with open('./tmp/actions_data.txt', 'w') as file:
-    for pred, gt in zip(action_pred_list, action_gt_list):
-        pred_str, gt_str = str(pred), str(gt.numpy())
-        pred_str, gt_str = pred_str.replace('\n', ''), gt_str.replace('\n', '')
-        file.write(f"{pred_str}, {gt_str}\n")
-
-
-# 创建图表
-param_names = ['x', 'y', 'z', 'pitch', 'roll', 'yaw', 'openOrClose']
-fig, axs = plt.subplots(2, len(param_names), figsize=(20, 5))
-for i, frame in enumerate(image_list[:7]):
-    axs[0, i].imshow(frame)
-    axs[0, i].axis('off')
-
-
-# 绘制数据
-action_pred_list = np.array([item for item in action_pred_list])
-action_gt_list = np.array([item for item in action_gt_list])
-for i, param in enumerate(param_names):
-    axs[1, i].plot(action_gt_list[:, i], label='True Value', marker='o')
-    axs[1, i].plot(action_pred_list[:, i], label='Predicted Value', marker='x')
-    axs[1, i].set_title(param)
-    axs[1, i].legend()
-
-
-# 调整布局
-plt.tight_layout()
-
-# 保存图像
-plt.savefig('./tmp/combined_plot.png')
-plt.show()

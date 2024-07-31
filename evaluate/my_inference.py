@@ -116,7 +116,9 @@ def to_model_action(from_step):
 
 if __name__ == '__main__':
     saved_model_path = 'models/bridge_model_v1'    # TODO
-
+    """
+    废了，用什么TensorFlow，真没搞头，弃明投暗
+    """
     #  创建tfa_policy策略对象 .pbtxt描述模型结构和参数
     tfa_policy = py_tf_eager_policy.SavedModelPyTFEagerPolicy(
         model_path=saved_model_path,
